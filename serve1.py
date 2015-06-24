@@ -3,38 +3,80 @@
 
 import socket
 import threading
-import time
 
-users = []
+
+max_sock = 99 #число подключений
 sock = socket.socket()
 sock.bind(('', 9090))
-sock.listen(10)
+sock.listen(max_sock)
 
-def news_users():
-    while 1:
-        conn, addr = sock.accept()
-        users.append([conn, addr])
-        print 'connected:', addr
-        t = threading.Thread(target=user1, args=(15, users[-1][0]))
-        t.start()
+users={}
 
+class Client:
+    def __init__(self, conn, addr):
+        self.data = []
+        self.conn = conn
+        self.addr = addr
+        if "DONE" not in self.conn.recv(1024):#ждать чтобы софтина иницулась и скинула ДОНЕ
+            self.conn.close()
+            print "all bad"
+        self.user_name = self.conn.recv(1024)
+        print "hello", self.user_name
+        
+    def send_msg(self, msg):
+        self.conn.send(msg)
+        
+    def __wait_msg(self):
+        while True:
+            try:
+                data = self.conn.recv(1024)
+                if not data:
+                    break
+                self.data.append(data)
+                print data
+                self.send_msg(data)
+            except Exception as inst:
+                a = str(inst)
+                if '10054' in a:
+                    self.conn.close()
+                    print inst
+                    del users[self.conn]
+                    break
+                else:
+                    self.conn.close()
 
-def user1(interval, conni):
-    print "+1"
+        self.conn.close()
+        
+    def activate(self):
+        nus = threading.Thread(target=self.__wait_msg)
+        nus.start()
+
+def scan_new_user():
     while True:
-        data = conni.recv(1024)
-        if not data:
-            print 'disconnected:', addr
-            conn.close()
-            break
-        print data
-        for i in users:
-            i[0].send(data.upper())
-
-nus = threading.Thread(target=news_users)
-nus.start()
+        conn, addr = sock.accept()
+        print 'connected:', addr
+        users[conn] = Client(conn, addr)
+        users[conn].activate()
+        
 
 
 
 
-input()
+s = threading.Thread(target=scan_new_user)
+s.start()
+
+
+#def is_send_to(amsg)
+    
+    #return name, msg
+
+    #else: return 0
+
+
+
+
+#conn.send(data.upper())#отправляем клиенту conn
+
+#conn.close()
+
+#input()
